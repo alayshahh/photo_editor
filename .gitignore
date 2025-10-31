@@ -21,3 +21,15 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+dist/
+build/
+
+#rust outputs
+wasm-processor/target/
+
+#wasm output
+src/pkg
+
+#rust-analyzer
+/target

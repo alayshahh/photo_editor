@@ -1,25 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import logo from './logo.svg';
 import './App.css';
-
+import { ToolType } from './utils/toolTypes';
+import { ImagePreview, Sidebar } from './components';
+import { CanvasProvider } from './components/image_preview/canvas_context';
+import { ToolPanel } from './components/tool_panel/ToolPanel';
 function App() {
+  const [activeTool, setActiveTool] = useState<ToolType>(ToolType.GRAINER);
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    
+      <div className="app">
+        <CanvasProvider>
+        <header>
+          <h1>Photo Editor</h1>
+        </header>
+        <div className='editor'>
+          <div className="sidebar-container">
+            <Sidebar activeTool={activeTool} setActiveTool={setActiveTool} />
+            <ToolPanel toolType={activeTool}/>
+          </div>
+          <div className="main-canvas-container">
+            <ImagePreview />
+          </div>
+        </div>
+        </CanvasProvider>
+      </div>
   );
 }
 

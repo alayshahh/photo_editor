@@ -36,3 +36,45 @@
     transform: rotate(360deg);
   }
 }
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  padding: 10px;
+  background-color: #282c34;
+  color: white;
+}
+
+.editor {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar-container {
+  width: 240px;
+  background: #1f1f1f;
+  color: white;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.main-canvas-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #333;
+  overflow: auto;
+}
+
+/* Make canvas scale nicely */
+canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
