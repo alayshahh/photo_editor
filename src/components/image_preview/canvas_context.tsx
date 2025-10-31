@@ -17,6 +17,10 @@ export interface CanvasContextProps {
     setBlurredHalationLayerData: (data: ImageData | null) => void;
     isWasmLoaded: boolean,
     setIsWasmLoaded: (loaded: boolean) => void;
+    isWebGLLoaded: boolean,
+    setIsWebGLLoaded: (loaded: boolean) => void
+    halationLayerData: ImageData | null; 
+    setHalationLayerData: (data: ImageData | null) => void;
 }
 
 const CanvasContext = createContext<CanvasContextProps | null>(null);
@@ -29,10 +33,16 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 1. State for the Thresholded Brightness Mask
     const [brightnessMaskData, setBrightnessMaskData] = useState<ImageData | null>(null); 
-    
+
     // 2. State for the Blurred Halation Layer
     const [blurredHalationLayerData, setBlurredHalationLayerData] = useState<ImageData | null>(null);
+
+    // 3. Final state for halations
+    const [halationLayerData, setHalationLayerData] = useState<ImageData | null>(null);
+
+    // engine states
     const [isWasmLoaded, setIsWasmLoaded] = useState<boolean>(false);
+    const [isWebGLLoaded, setIsWebGLLoaded] = useState<boolean>(false);
 
 
     // Universal setter function
@@ -69,6 +79,10 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const data = ctx.getImageData(0, 0, img.width, img.height);
             setOriginalImageData(data);
             setImageLoaded(true);
+            // reset cache for halations on new image upload
+            setIsWebGLLoaded(false); // Force WebGL re-initialization
+            setBrightnessMaskData(null); // Clear the old mask data
+            setBlurredHalationLayerData(null); // Clear the old blurred data
             URL.revokeObjectURL(url);
         };
         img.src = url;
@@ -98,7 +112,11 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 blurredHalationLayerData, 
                 setBlurredHalationLayerData,
                 isWasmLoaded,
-                setIsWasmLoaded
+                setIsWasmLoaded,
+                isWebGLLoaded,
+                setIsWebGLLoaded,
+                halationLayerData,
+                setHalationLayerData
             }}
         >
             {children}
