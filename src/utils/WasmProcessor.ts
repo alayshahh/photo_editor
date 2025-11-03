@@ -13,7 +13,7 @@ function hexToRgb(hex: string): [number, number, number] {
 export function colorizeMask(
     blurredMaskData: ImageData, 
     tintColor: string
-): ImageData | null {
+): HTMLImageElement | null {
     
     const colorizedBuffer = blurredMaskData.data.slice(); 
     const [r, g, b] = hexToRgb(tintColor);
@@ -24,12 +24,21 @@ export function colorizeMask(
         g, 
         b
     );
-
-    return new ImageData(
+    const canvas = document.createElement('canvas')
+    canvas.width = blurredMaskData.width
+    canvas.height = blurredMaskData.height
+    const img_data = new ImageData(
         colorizedBuffer, 
         blurredMaskData.width, 
         blurredMaskData.height
-    );
+    )
+
+    canvas.getContext('2d')?.putImageData(img_data, 0,0);
+
+
+    const image = new Image()
+    image.src = canvas.toDataURL();
+    return image;
 }
 
 export function createBrightnessMask(originalData: ImageData, threshold: number){

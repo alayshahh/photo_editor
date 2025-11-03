@@ -2,146 +2,175 @@
 
 import { CanvasContextProps } from "../components/image_preview/canvas_context";
 
-// initialize webGL
-
-
 
 export class WebGLProcessor {
 
-    private readonly VERTEX_SHADER_SOURCE: string =
-        `#version 300 es // the version to use (we are on WebGL2)
-    in vec2 a_position; // xy coordinates of a corner of the Quad (2 triangles used to make our image)
-    in vec2 a_texCoord; // the u,v texture coordinates of the same corner, where to sample input texture from
-    out vec2 v_texCoord; // passes uv texture to the fragment shader 
-    void main() {
-        gl_Position = vec4(a_position, 0, 1); // final position of vertex on screen
-        _texCoord = a_texCoord; // passes texture to fragment shader
-    }`;
+    // --- SHADER SOURCES ---
+    private readonly VERTEX_SHADER_SRC = `#version 300 es
+            layout(location=0) in vec4 aPosition;
+            layout(location=1) in vec2 aTexCoord;
+            out vec2 vTexCoord;
+            void main() {
+                gl_Position = aPosition;
+                vTexCoord = aTexCoord;
+            }`;
 
-
-    private readonly FRAGMENT_SHADER_SOURCE =
-        `#version 300 es
-        precision highp float; // sets the precision for calcualtions (need high for image qual)
-        in vec2 v_texCoord; // from v shader -> tells the f shader the exact location of it on the image
-        out vec4 outColor; // final color for the pixel
-
-        uniform sampler2D u_image; // input data -> in this case this is my binary brightness mask
-        uniform float u_resolution;  // image resolution
-        uniform float u_radius; // blur radius
-        uniform vec2 u_direction; // direction of blur, since we do a 2 pass will either be vertical or horizontal
-
-        void main() {
-            vec4 sum = vec4(0.0);
-    
-            // Calculate the normalized step size (based on image size and blur direction)
-            // We sample further apart as the radius increases.
-            vec2 texelStep = u_direction / u_resolution; 
-    
-            // --- 5-Tap Gaussian Kernel ---
-            // The coefficients (0.05, 0.25, 0.4, 0.25, 0.05) are fixed Gaussian weights.
-    
-            sum += texture(u_image, v_texCoord - 2.0 * texelStep * u_radius) * 0.05;
-            sum += texture(u_image, v_texCoord - 1.0 * texelStep * u_radius) * 0.25;
-            sum += texture(u_image, v_texCoord) * 0.4;
-            sum += texture(u_image, v_texCoord + 1.0 * texelStep * u_radius) * 0.25;
-            sum += texture(u_image, v_texCoord + 2.0 * texelStep * u_radius) * 0.05;
-    
-            outColor = sum;
-        }`;
-
+    private readonly FRAGMENT_SHADER_SRC = `#version 300 es
+    #pragma vscode_glsllint_stage: frag
+            precision mediump float;
+            uniform sampler2D sampler;
+            uniform vec2 uvStride;
+            uniform vec2[128] offsetAndScale;
+            uniform int kernelWidth;
+            in vec2 vTexCoord;
+            out vec4 fragColor;
+            void main() {
+                fragColor = vec4(0.0);
+                for (int i = 0; i < kernelWidth; i++) {
+                    fragColor += texture(sampler, vTexCoord + offsetAndScale[i].x * uvStride) * offsetAndScale[i].y;
+                }
+            }`;
 
     private gl: WebGL2RenderingContext | null = null;
     private program: WebGLProgram | null = null;
-    private frameBufferObj: WebGLFramebuffer | null = null;
-    private frameBufferObjTexture: WebGLTexture | null = null;
+    private blurVAO: WebGLVertexArrayObject | null = null;
+    private ctx2d: CanvasRenderingContext2D | null = null;
 
+    // WebGL Resources
+    private inputTexture: WebGLTexture | null = null;
+    private intermediateTexture: WebGLTexture | null = null;
+    private intermediateFbo: WebGLFramebuffer | null = null;;
+    private outputTexture: WebGLTexture | null = null;
+    private outputFbo: WebGLFramebuffer | null = null;
+
+    // Uniform Locations
+    private uniforms: {
+        uvStride: WebGLUniformLocation | null;
+        offsetAndScale: WebGLUniformLocation | null;
+        kernelWidth: WebGLUniformLocation | null;
+        sampler: WebGLUniformLocation | null;
+    } = {
+            uvStride: null,
+            offsetAndScale: null,
+            kernelWidth: null,
+            sampler: null
+        };
+
+    // Cached Kernel Data and Dimensions
+    private offsetsAndScales: Float32Array | null = null;
     private width: number = 0;
     private height: number = 0;
-    private a_position: number = -1;
-    private a_texCoord: number = -1;
-    private u_image: WebGLUniformLocation | null = null;
-    private u_resolution: WebGLUniformLocation | null = null;
-    private u_radius: WebGLUniformLocation | null = null;
-    private u_direction: WebGLUniformLocation | null = null;
 
-    public init(width: number, height: number) {
+    /**
+     * Initializes or resizes the GPU resources (Context, Textures, and FBOs)
+     * based on the image size. This must be called before applyBlur.
+     * @param width The width of the image.
+     * @param height The height of the image.
+     * @returns True if initialization was successful, false otherwise.
+     */
+    public init(width: number, height: number): boolean {
+
         const webgl_canvas = document.createElement('canvas')
-        this.gl = webgl_canvas.getContext("webgl2")
-
-        if (!this.gl) {
-            console.error("WebGL2 not supported. Failing.");
+        const gl = webgl_canvas.getContext("webgl2");
+        if (!gl) {
+            console.error("WebGL 2 not supported.");
             return false;
         }
-        if (!this.createProgram()) return false;
-        this.getLocations();
-        this.setupBuffers();
-        this.setupFBO();
+        console.log("inited gl");
+        this.gl = gl;
+        this.ctx2d = document.createElement('canvas').getContext('2d');
+        if (!this.ctx2d) return false;
+        console.log("loaded 2d ctx")
+        this.offsetsAndScales = new Float32Array(256);
+
+        // Program and VAO are static and size-independent
+        if (!this.createProgram() || !this.program) return false;
+        if (!this.setupVAO()) return false;
+
+        console.log("set up program and vao");
+
+        // Create initial resource placeholders
+        this.inputTexture = gl.createTexture()!;
+        this.intermediateTexture = gl.createTexture()!;
+        this.intermediateFbo = gl.createFramebuffer()!;
+        this.outputTexture = gl.createTexture()!;
+        this.outputFbo = gl.createFramebuffer()!;
+
+        this.width = width;
+        this.height = height;
+        webgl_canvas.width = width;
+        webgl_canvas.height = height;
+        gl.viewport(0, 0, width, height);
+
+        // Configure the three FBO chains (Intermediate and Output)
+        if (!this.configureResource(this.intermediateTexture, this.intermediateFbo)) return false;
+        if (!this.configureResource(this.outputTexture, this.outputFbo)) return false;
+
+        console.log("configured resources")
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        return true;
     }
 
-    public applyBlur(inputData: ImageData, radius: number): ImageData | null {
+    private configureResource(texture: WebGLTexture, fbo: WebGLFramebuffer) {
         const gl = this.gl;
-        if (!gl || !this.program || !this.frameBufferObj || !this.frameBufferObjTexture) return null;
+        if (!gl) return false;
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
-        // 1. Create the input texture from the WASM-generated mask
-        const inputTexture = this.createTextureFromData(inputData.data);
-        if (!inputTexture) return null;
-
-        gl.useProgram(this.program);
-        gl.viewport(0, 0, this.width, this.height);
-        
-        // Set Uniforms (variables used by the shader)
-        gl.uniform1i(this.u_image, 0); // Use Texture unit 0
-        gl.uniform1f(this.u_resolution, this.width);
-        gl.uniform1f(this.u_radius, radius); // The variable blur amount
-
-
-        // --- PASS 2a: Horizontal Blur (Render to FBO) ---
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBufferObj); // Output to the off-screen cache
-        gl.bindTexture(gl.TEXTURE_2D, inputTexture); // Input is the raw mask
-        gl.uniform2f(this.u_direction, 1.0, 0.0); // Direction: X-axis
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // Draw the quad
-
-        // Clean up the initial texture; it's now copied to the FBO texture
-        gl.deleteTexture(inputTexture); 
-
-
-        // --- PASS 2b: Vertical Blur (Render to Main Read Buffer) ---
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); // Output to the main hidden canvas buffer
-        gl.bindTexture(gl.TEXTURE_2D, this.frameBufferObjTexture); // Input is the result of the horizontal pass
-        gl.uniform2f(this.u_direction, 0.0, 1.0); // Direction: Y-axis
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // Draw the quad
-
-        // 3. Read the final pixel data back from the GPU to the CPU
-        const outputBuffer = new Uint8Array(this.width * this.height * 4);
-        gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, outputBuffer);
-
-        // 4. Return the result as ImageData
-        return new ImageData(
-            new Uint8ClampedArray(outputBuffer.buffer), 
-            this.width, 
-            this.height
-        );
-    }
-
-    private compileShader(source: string, type: number): WebGLShader | null {
-        const gl = this.gl;
-        if (!gl) return null
-        // create the shader obj, then input the source, then compile the source
-        const shader = gl.createShader(type);
-        if (!shader) return null
-        gl.shaderSource(shader, source)
-        gl.compileShader(shader)
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
-            return null;
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+            console.error('FBO incomplete after resizing to', this.width, this.height);
+            return false;
         }
-        return shader;
+        return true;
+    };
 
+    private setupVAO(): boolean {
+        const gl = this.gl;
+        const program = this.program;
+        if (!gl || !program) return false;
+        gl.useProgram(program);
+        this.uniforms = {
+            uvStride: gl.getUniformLocation(program, 'uvStride'),
+            offsetAndScale: gl.getUniformLocation(program, 'offsetAndScale'),
+            kernelWidth: gl.getUniformLocation(program, 'kernelWidth'),
+            sampler: gl.getUniformLocation(program, 'sampler')
+        };
+        gl.uniform1i(this.uniforms.sampler, 0);
+
+        // --- QUAD VAO/BUFFER SETUP ---
+        const blurQuadData = new Float32Array([
+            -1, 1, 0, 1, -1, -1, 0, 0, 1, 1, 1, 1, 1, -1, 1, 0,
+        ]);
+
+        this.blurVAO = gl.createVertexArray()!;
+        gl.bindVertexArray(this.blurVAO);
+
+        const blurBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, blurBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, blurQuadData, gl.STATIC_DRAW);
+
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+        gl.enableVertexAttribArray(0);
+        gl.enableVertexAttribArray(1);
+        gl.bindVertexArray(null);
+        return true;
     }
 
-    private createProgram(): WebGLProgram | null {
-        
+    // --- PRIVATE HELPER METHODS (Kernel logic, etc., remain the same) ---
+
+    private createProgram(): boolean {
+
         const gl = this.gl;
         if (!gl) return false;
         /* a web gl program contains 2 compiled shaders within it. 
@@ -157,11 +186,11 @@ export class WebGLProcessor {
         if (!program) return false;
 
         // a vertex shader handles the geometry of the object (in our cse the flat 2d image)
-        const vertexShader = this.compileShader(this.VERTEX_SHADER_SOURCE, gl.VERTEX_SHADER)
+        const vertexShader = this.compileShader(this.VERTEX_SHADER_SRC, gl.VERTEX_SHADER)
 
         // the fragment shader runs for every pixel : responsible for the coloring
         // in our case since the geometry is simple, the fragment shader will be the more important one i think
-        const fragmentShader = this.compileShader(this.FRAGMENT_SHADER_SOURCE, gl.FRAGMENT_SHADER)
+        const fragmentShader = this.compileShader(this.FRAGMENT_SHADER_SRC, gl.FRAGMENT_SHADER)
 
         if (!vertexShader || !fragmentShader) return false;
         // connect shaders to program
@@ -185,106 +214,165 @@ export class WebGLProcessor {
         return true;
     }
 
-    private getLocations() {
+    private compileShader(source: string, type: number): WebGLShader | null {
         const gl = this.gl;
-        const program = this.program;
-        if (!gl || !program) return;
-        // Attributes (Inputs from CPU buffers) -> sent to the vertex shader
-        this.a_position = gl.getAttribLocation(program, 'a_position');
-        this.a_texCoord = gl.getAttribLocation(program, 'a_texCoord');
-
-        // Uniforms (Inputs from JS variables/settings) -> used in the fragment shader
-        this.u_image = gl.getUniformLocation(program, 'u_image');
-        this.u_resolution = gl.getUniformLocation(program, 'u_resolution');
-        this.u_radius = gl.getUniformLocation(program, 'u_radius');
-        this.u_direction = gl.getUniformLocation(program, 'u_direction');
+        if (!gl) return null
+        // create the shader obj, then input the source, then compile the source
+        const shader = gl.createShader(type);
+        if (!shader) return null
+        gl.shaderSource(shader, source)
+        gl.compileShader(shader)
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
 
     }
 
-    private setupBuffers() {
-        const gl = this.gl;
-        if (!gl) return;
-        
-        // Positions for a screen-filling quad (-1 to 1)
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -1, -1,  // bottom-left
-             1, -1,  // bottom-right
-            -1,  1,  // top-left
-             1,  1,  // top-right
-        ]), gl.STATIC_DRAW);
-        
-        // Texture coordinates (0 to 1)
-        const texCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            0, 0,
-            1, 0,
-            0, 1,
-            1, 1,
-        ]), gl.STATIC_DRAW);
-        
-        // Configure Attributes
-        gl.useProgram(this.program);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.vertexAttribPointer(this.a_position, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(this.a_position);
-        
-        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-        gl.vertexAttribPointer(this.a_texCoord, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(this.a_texCoord);
+    private generate1DKernel(width: number): number[] {
+        if ((width & 1) !== 1) throw new Error('Only odd guassian kernel sizes are accepted');
+
+        const smallKernelLerps = [
+            [1.0], [0.25, 0.5, 0.25], [0.0625, 0.25, 0.375, 0.25, 0.0625],
+            [0.03125, 0.109375, 0.21875, 0.28125, 0.21875, 0.109375, 0.03125],
+        ];
+        if (width < 9) return smallKernelLerps[(width - 1) >> 1];
+
+        const kernel: number[] = [];
+        const sigma = width / 6;
+        const radius = (width - 1) / 2;
+        let sum = 0;
+
+        for (let i = 0; i < width; i++) {
+            const offset = i - radius;
+            const coefficient = 1 / (sigma * Math.sqrt(2 * Math.PI));
+            const exponent = -(offset * offset) / (2 * (sigma * sigma));
+            const value = coefficient * Math.exp(exponent);
+            sum += value;
+            kernel.push(value);
+        }
+
+        for (let i = 0; i < width; i++) {
+            kernel[i] /= sum;
+        }
+        return kernel;
     }
-    // creates gpu cache for the first and second pass
-    private setupFBO() {
+
+    private convertKernelToOffsetsAndScales(kernel: number[]): number[] {
+        if ((kernel.length & 1) === 0) throw new Error('Only odd kernel sizes can be lerped');
+
+        const radius = Math.ceil(kernel.length / 2);
+        const data: number[] = [];
+
+        let offset = -radius + 1;
+        let scale = kernel[0];
+        data.push(offset, scale);
+
+        const total = kernel.reduce((c, v) => c + v);
+
+        for (let i = 1; i < kernel.length; i += 2) {
+            const a = kernel[i];
+            const b = kernel[i + 1];
+
+            offset = -radius + 1 + i + (b / (a + b));
+            scale = (a + b) / total;
+            data.push(offset, scale);
+        }
+        return data
+    }
+
+    private setKernel(radius: number) {
         const gl = this.gl;
-        if (!gl) return;
+        if (!gl) {
+            console.error("failure during setting kernel")
+            return
+        }
+        let width = radius * 2 + 1;
+        if (width > 255) width = 255;
+        if ((width % 2) === 0) width += 1;
 
-        // 1. Create Frame Buffer Object (FBO) - Our GPU-side cache
-        this.frameBufferObj = gl.createFramebuffer();
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBufferObj);
+        const kernel1D = this.generate1DKernel(width);
+        const lerpKernel = this.convertKernelToOffsetsAndScales(kernel1D);
+        const numberOfOffsetsAndScales = lerpKernel.length / 2;
 
-        // 2. Create the Texture to store the result of the Horizontal pass
-        this.frameBufferObjTexture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, this.frameBufferObjTexture);
-        
-        // Allocate space for the texture with the correct size
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-        
+        this.offsetsAndScales!.fill(0);
+        this.offsetsAndScales!.set(lerpKernel);
+
+        gl.uniform2fv(this.uniforms.offsetAndScale, this.offsetsAndScales!);
+        gl.uniform1i(this.uniforms.kernelWidth, numberOfOffsetsAndScales);
+    }
+
+    private _drawUnidirectionalBlur(sourceTexture: WebGLTexture, destinationFBO: WebGLFramebuffer | null, uvStride: [number, number]) {
+        const gl = this.gl;
+        if (!gl){
+            console.error('gl is null')
+            return 
+        }
+
+        gl.bindVertexArray(this.blurVAO);
+        gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, destinationFBO);
+
+        gl.uniform2fv(this.uniforms.uvStride, uvStride);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    public updateInputMask(data: ImageData){
+        const gl = this.gl;
+        if (!gl) {
+            console.log("GL not initialized !")
+            return;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, this.inputTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, data);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    }
 
-        // 3. Attach the texture to the FBO
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.frameBufferObjTexture, 0);
+    /**
+     * Applies the two-pass Gaussian blur to the given image data and returns a new ImageData object.
+     */
+    public applyBlur(radius: number): ImageData | null {
+        const gl = this.gl as WebGL2RenderingContext;
+        const uvStrideWidth = 1 / this.width;
+        const uvStrideHeight = 1 / this.height;
+        
 
-        gl.bindTexture(gl.TEXTURE_2D, null);
+        // 2. Set the blur kernel based on the radius
+        gl.useProgram(this.program);
+        this.setKernel(radius);
+
+        if (!this.inputTexture || !this.intermediateTexture){
+            console.error("null input texture or intermediate texture")
+            return null;
+        }
+
+
+        // 3. FIRST PASS: Horizontal Blur (Input -> Intermediate FBO)
+        this._drawUnidirectionalBlur(this.inputTexture, this.intermediateFbo, [uvStrideWidth, 0]);
+
+        // 4. SECOND PASS: Vertical Blur (Intermediate -> OUTPUT FBO)
+        this._drawUnidirectionalBlur(this.intermediateTexture!, this.outputFbo, [0, uvStrideHeight]);
+
+        // 5. READ PIXELS BACK FROM the OUTPUT FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.outputFbo);
+        const pixelData = new Uint8Array(this.width * this.height * 4);
+        gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    }
-    
-    // Takes in the binary mask and creates a texture
-    private createTextureFromData(data: Uint8ClampedArray): WebGLTexture | null {
-        const gl = this.gl;
-        if (!gl) return null;
-        
-        const texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        
-        // This uploads the WASM-generated mask data to the GPU
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-        
-        // Set standard texture parameters for filtering and edge handling
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); // so theres no "edge" and you dont need to worry about edge handling
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        
-        gl.bindTexture(gl.TEXTURE_2D, null); // clean up
-        return texture;
+
+        // 6. Create and return a new ImageData object
+        const imageDataResult = this.ctx2d!.createImageData(this.width, this.height);
+        imageDataResult.data.set(pixelData);
+        console.log(imageDataResult)
+
+        return imageDataResult;
     }
 
-    
 }
 
 export const webGLProcessor = new WebGLProcessor();
@@ -296,7 +384,7 @@ export function initWebGLProcessor(context: CanvasContextProps) {
         return
     }
     if (!context.isWebGLLoaded) {
-        if (webGLProcessor.init(context.originalImageData.width, context.originalImageData.height)){
+        if (webGLProcessor.init(context.originalImageData.width, context.originalImageData.height)) {
             context.setIsWebGLLoaded(true);
         } else {
             console.error("Failed to initialize webGL :( ")

@@ -27,7 +27,7 @@ export const ImagePreview: React.FC = () => {
 
 
   useEffect(() => updateBrightnessMask(ctx), [ctx.imageLoaded, ctx.originalImageData, ctx.filterSettings.halation.brightnessThreshold])
-  useEffect(() => updateBlurRadius(ctx), [ctx.brightnessMaskData, ctx.filterSettings.halation.blurRadius])
+  useEffect(() => updateBlurRadius(ctx), [ctx.brightnessMaskData, ctx.filterSettings.halation.blurRadius, ctx.isWebGLLoaded])
   useEffect(() => updateHalationTint(ctx), [ctx.originalImageData, ctx.blurredHalationLayerData, ctx.filterSettings.halation.color])
 
   useEffect(() => displayCompositeHalation(ctx), [ctx.imageLoaded, ctx.originalImageData, ctx.halationLayerData])
