@@ -1,4 +1,4 @@
-import { createBrightnessMask, colorizeMask } from "../../../utils/WasmProcessor";
+import { createBrightnessMask, colorizeMask, displayOverlayedHalation } from "../../../utils/WasmProcessor";
 import { webGLProcessor } from "../../../utils/WebGLProcessor";
 import { CanvasContextProps } from "../../image_preview/canvas_context";
 
@@ -45,18 +45,14 @@ export function displayCompositeHalation(context: CanvasContextProps) {
     const canvas_context = canvas?.getContext('2d')
 
 
-    if (!context.imageLoaded || !context.originalImageData || !canvas || !canvas_context) return;
+    if (!context.imageLoaded || !context.originalImageData || !canvas || !canvas_context || !context.halationLayerData) return;
+
+
 
     // 1. Draw the Base Image (Always draw first)
     canvas_context.clearRect(0, 0, canvas.width, canvas.height);
-    canvas_context.putImageData(context.originalImageData, 0, 0);
-
-    // 2. Draw the Halation Layer
-    if (context.halationLayerData) {
-        canvas_context.globalCompositeOperation = 'lighten';
-        canvas_context.drawImage(context.halationLayerData, 0, 0, canvas.width, canvas.height);
-        canvas_context.globalCompositeOperation = 'source-over'; // Reset
-    }
+    canvas_context.putImageData(displayOverlayedHalation(context.originalImageData, context.halationLayerData), 0, 0);
 
 }
 
+ 

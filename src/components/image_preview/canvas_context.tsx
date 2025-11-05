@@ -19,8 +19,8 @@ export interface CanvasContextProps {
     setIsWasmLoaded: (loaded: boolean) => void;
     isWebGLLoaded: boolean,
     setIsWebGLLoaded: (loaded: boolean) => void
-    halationLayerData: HTMLImageElement | null; 
-    setHalationLayerData: (data: HTMLImageElement | null) => void;
+    halationLayerData: ImageData | null; 
+    setHalationLayerData: (data: ImageData | null) => void;
 }
 
 const CanvasContext = createContext<CanvasContextProps | null>(null);
@@ -38,7 +38,9 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [blurredHalationLayerData, setBlurredHalationLayerData] = useState<ImageData | null>(null);
 
     // 3. Final state for halations
-    const [halationLayerData, setHalationLayerData] = useState<HTMLImageElement | null>(null);
+    const [halationLayerData, setHalationLayerData] = useState<ImageData | null>(null);
+
+    
 
     // engine states
     const [isWasmLoaded, setIsWasmLoaded] = useState<boolean>(false);

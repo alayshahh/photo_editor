@@ -1,5 +1,6 @@
 import * as Wasm from "../pkg"
 import { CanvasContextProps } from "../components/image_preview/canvas_context";
+import exp from "constants";
 
 // Helper function to convert hex color string to R, G, B components
 function hexToRgb(hex: string): [number, number, number] {
@@ -13,7 +14,7 @@ function hexToRgb(hex: string): [number, number, number] {
 export function colorizeMask(
     blurredMaskData: ImageData, 
     tintColor: string
-): HTMLImageElement | null {
+): ImageData {
     
     const colorizedBuffer = blurredMaskData.data.slice(); 
     const [r, g, b] = hexToRgb(tintColor);
@@ -24,30 +25,30 @@ export function colorizeMask(
         g, 
         b
     );
-    const canvas = document.createElement('canvas')
-    canvas.width = blurredMaskData.width
-    canvas.height = blurredMaskData.height
-    const img_data = new ImageData(
+    return new ImageData(
         colorizedBuffer, 
         blurredMaskData.width, 
         blurredMaskData.height
     )
-
-    canvas.getContext('2d')?.putImageData(img_data, 0,0);
-
-
-    const image = new Image()
-    image.src = canvas.toDataURL();
-    return image;
 }
 
 export function createBrightnessMask(originalData: ImageData, threshold: number){
     const inputMatrix = originalData.data.slice();
     Wasm.create_brightness_mask(inputMatrix as unknown as Uint8Array, threshold);
     return new ImageData(
-        inputMatrix.slice(), 
+        inputMatrix, 
         originalData.width,
         originalData.height
+    );
+}
+
+export function displayOverlayedHalation(imageData: ImageData, halationMaskImageData: ImageData): ImageData {
+    const inputMatrix = imageData.data.slice();
+    Wasm.lighten_overlay_image(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
+    return new ImageData(
+        inputMatrix,
+        imageData.width,
+        imageData.height
     );
 }
 
