@@ -14,6 +14,19 @@ export const ImagePreview: React.FC = () => {
     }
   };
 
+  const saveImage = () => {
+    const imageUrl = ctx.canvasRef.current?.toDataURL();
+    if (imageUrl) {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = imageUrl;
+      downloadLink.download = 'my-canvas-image.png';
+
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+  }
+
   // load wasm engine
   useEffect(() => {
     initWasmProcessor(ctx)
@@ -36,6 +49,7 @@ export const ImagePreview: React.FC = () => {
     <div className="image-preview">
       <input type="file" accept="image/*" onChange={handleChange} />
       <canvas ref={ctx.canvasRef} />
+      <button onClick={saveImage}> Save Image </button>
     </div>
   );
 };
