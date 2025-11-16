@@ -1,6 +1,6 @@
 use image::{imageops::resize, ImageBuffer, Rgb};
-use rand::distributions::Distribution;
-use statrs::distribution::Normal;
+use rand::{Rng, rngs::ThreadRng};
+
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -77,22 +77,28 @@ pub fn get_noise_mask(
 fn gen_noise_mask(width: u32, height: u32, variance: f32) -> ImageBuffer<Rgb<f32>, Vec<f32>> {
     let mut noise_mask: ImageBuffer<Rgb<f32>, Vec<f32>> =
         ImageBuffer::<Rgb<f32>, Vec<f32>>::new(width, height);
+
+    
     if variance <= 0.0 {
         return noise_mask;
     }
+    let SAMPLES = 4;
 
-    let distribution = Normal::new(
-        0.0,                    /* We want the mean to be near 0 */
-        variance.sqrt() as f64, /* Custom variance(grain intensity) for the layer */
-    )
-    .unwrap();
+    let normal_approx_noise = |rng: &mut ThreadRng| {
+        let mut noise_sum = 0.0;
+        for _ in 0..SAMPLES {
+            noise_sum += rng.gen_range(-1.0..1.0);
+        }
+        noise_sum * variance
+
+    };
 
     let mut rand = rand::thread_rng();
 
     for pixel in noise_mask.pixels_mut() {
-        pixel[0] = distribution.sample(&mut rand) as f32;
-        pixel[1] = distribution.sample(&mut rand) as f32;
-        pixel[2] = distribution.sample(&mut rand) as f32;
+        pixel[0] = normal_approx_noise(&mut rand);
+        pixel[1] = normal_approx_noise(&mut rand);
+        pixel[2] = normal_approx_noise(&mut rand);
     }
 
     noise_mask

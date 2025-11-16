@@ -42,7 +42,7 @@ pub fn overlay_halation(base: &mut [u8], halation_mask: &[u8]) {
         }
         base[pixel + 3] = f32_to_u8(final_a);
 
-        // other wise the only halation pixel is transparent in which case we dont do anyting
+        // other wise the only halation pixel is transparent in which case we don't do anything
         pixel += 4;
     }
 }
@@ -56,7 +56,7 @@ pub fn overlay_grain_mask(image: &mut [u8], grain_mask: &[f32]) {
         image[pixel] = f32_to_u8(u8_to_f32(image[pixel]) + grain_mask[pixel]);
         image[pixel+1]= f32_to_u8(u8_to_f32(image[pixel+1]) + grain_mask[pixel+1]);
         image[pixel+2] = f32_to_u8(u8_to_f32(image[pixel+2]) + grain_mask[pixel+2]);
-        // im skipping aplpha here since idt i want to make this more or less opaque. simple pixel addition
+        // im skipping alpha here since idt i want to make this more or less opaque. simple pixel addition
         pixel += 4;
     }
 }
