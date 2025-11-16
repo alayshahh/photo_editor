@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { CanvasContextProps, useCanvas } from './canvas_context';
-import { updateBrightnessMask, updateBlurRadius, updateHalationTint, displayCompositeHalation } from "../tools/tool_logic"
+import { updateBrightnessMask, updateBlurRadius, updateHalationTint, createCompositeImageData } from "../tools/tool_logic"
 import { initWasmProcessor } from '../../utils/WasmProcessor';
 import { initWebGLProcessor } from '../../utils/WebGLProcessor';
+import { updateGrainMask } from '../tools/tool_logic/Grain';
 
 export const ImagePreview: React.FC = () => {
   const ctx: CanvasContextProps = useCanvas();
@@ -42,8 +43,8 @@ export const ImagePreview: React.FC = () => {
   useEffect(() => updateBrightnessMask(ctx), [ctx.imageLoaded, ctx.originalImageData, ctx.filterSettings.halation.brightnessThreshold])
   useEffect(() => updateBlurRadius(ctx), [ctx.brightnessMaskData, ctx.filterSettings.halation.blurRadius, ctx.isWebGLLoaded])
   useEffect(() => updateHalationTint(ctx), [ctx.originalImageData, ctx.blurredHalationLayerData, ctx.filterSettings.halation.color])
-
-  useEffect(() => displayCompositeHalation(ctx), [ctx.imageLoaded, ctx.originalImageData, ctx.halationLayerData])
+  useEffect(() => updateGrainMask(ctx), [ctx.originalImageData, ctx.filterSettings.grain]);
+  useEffect(() => createCompositeImageData(ctx), [ctx.imageLoaded, ctx.originalImageData, ctx.halationLayerData, ctx.grainNoiseMask])
 
   return (
     <div className="image-preview">

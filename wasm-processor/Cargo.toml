@@ -10,7 +10,9 @@ image = "0.25.8"
 rand = "0.8.5"
 statrs = "0.18.0"
 wasm-bindgen = "0.2.105"
-getrandom = { version = "0.2", features = ["js"] }
+# found on some rust forum https://users.rust-lang.org/t/the-wasm-unknown-unknown-targets-are-not-supported-by-default-you-may-need-to-enable-the-js-feature/131213 
+# not sure if there is a better way to go about this
+getrandom = { version = "0.2", features = ["js"] } 
 
 [lib]
 crate-type = ["cdylib", "rlib"]

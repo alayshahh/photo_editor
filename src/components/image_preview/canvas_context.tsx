@@ -21,6 +21,8 @@ export interface CanvasContextProps {
     setIsWebGLLoaded: (loaded: boolean) => void
     halationLayerData: ImageData | null; 
     setHalationLayerData: (data: ImageData | null) => void;
+    grainNoiseMask: Float32Array | null;
+    setGrainNoiseMask: (data: Float32Array | null) => void;
 }
 
 const CanvasContext = createContext<CanvasContextProps | null>(null);
@@ -39,6 +41,9 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 3. Final state for halations
     const [halationLayerData, setHalationLayerData] = useState<ImageData | null>(null);
+
+    // grain state
+    const [grainNoiseMask, setGrainNoiseMask] = useState<Float32Array|null>(null);
 
     
 
@@ -81,11 +86,16 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const data = ctx.getImageData(0, 0, img.width, img.height);
             setOriginalImageData(data);
             setImageLoaded(true);
+            
             // reset cache for halations on new image upload
             setIsWebGLLoaded(false); // Force WebGL re-initialization
             setBrightnessMaskData(null); // Clear the old mask data
             setBlurredHalationLayerData(null); // Clear the old blurred data
-            setHalationLayerData(null)
+            setHalationLayerData(null);
+
+            // reset grain mask
+            setGrainNoiseMask(null);
+
             URL.revokeObjectURL(url);
         };
         img.src = url;
@@ -119,7 +129,9 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 isWebGLLoaded,
                 setIsWebGLLoaded,
                 halationLayerData,
-                setHalationLayerData
+                setHalationLayerData,
+                grainNoiseMask,
+                setGrainNoiseMask
             }}
         >
             {children}

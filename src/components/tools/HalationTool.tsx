@@ -21,8 +21,8 @@ export const HalationTool: React.FC = () => {
         <input
           type="range"
           min={0}
-          max={100}
-          defaultValue={10}
+          max={250}
+          defaultValue={0}
           onChange={(e) => updateHalation("blurRadius", e.target.valueAsNumber)}
           disabled={!isWasmLoaded}
         />
@@ -31,8 +31,8 @@ export const HalationTool: React.FC = () => {
         Brightness Threshold:
         <input type="range"
           min={0}
-          max={100}
-          defaultValue={50}
+          max={255}
+          defaultValue={0}
           onChange={(e) => updateHalation("brightnessThreshold", e.target.valueAsNumber)}
           disabled={!isWasmLoaded}
         />
@@ -40,6 +40,7 @@ export const HalationTool: React.FC = () => {
       <label>
         Tint (RGB):
         <input type="color"
+          defaultValue={"#FFFFFF"}
           onChange={(e) => updateHalation("color", e.target.value)}
           disabled={!isWasmLoaded}
         />
@@ -47,16 +48,3 @@ export const HalationTool: React.FC = () => {
     </div>
   );
 };
-
-function updateHalationRadius(r: number) {
-  console.log("new Radius" + r)
-
-}
-function updateHalationColor(color: string) {
-  console.log("new Color" + color)
-}
-
-function updateHalationThreshold(t: number) {
-  console.log("new threshold" + t)
-
-}
