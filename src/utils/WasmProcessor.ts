@@ -45,10 +45,10 @@ export function createBrightnessMask(originalData: ImageData, threshold: number)
 export function createCompositeImage(imageData: ImageData, halationMaskImageData: ImageData | null, grainMask: Float32Array | null): ImageData {
     const inputMatrix = imageData.data.slice();
     if (grainMask) {
-        Wasm.overlay_grain_mask(inputMatrix as unknown as Uint8Array, grainMask);
+        overlay_grain_mask(inputMatrix as unknown as Uint8Array, grainMask);
     }
     if (halationMaskImageData) {
-        Wasm.overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
+        overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
     }
 
     return new ImageData(
@@ -61,7 +61,6 @@ export function createCompositeImage(imageData: ImageData, halationMaskImageData
 }
 
 export function createGrainMask(width: number, height: number, largeGrainIntensity: number, mediumGrainIntensity: number, fineGrainIntensity: number): Float32Array {
-    console.log(`Calling wasm get noise mask with width: ${width}, height: ${height}, largeGrainIntensity${largeGrainIntensity}, mediumGrainIntensity: ${mediumGrainIntensity}, fineGrainIntensity: ${fineGrainIntensity}`)
     return Wasm.get_noise_mask(width, height, fineGrainIntensity, mediumGrainIntensity, largeGrainIntensity);
 }
 
@@ -75,12 +74,20 @@ export async function initWasmProcessor(ctx: CanvasContextProps): Promise<void> 
     // that handles the fetching and instantiation of the .wasm binary.
     try {
         // We call the generated init function. It returns a Promise.
-        await Wasm.default(); // <--- This is the core loading step
+        let wasm = await Wasm.default(); // <--- This is the core loading step
+        console.log(wasm.memory.buffer.byteLength);
+        console.log(wasm.memory.buffer instanceof SharedArrayBuffer); // 🛑 MUST be TRUE
+        // Pass the number of available cores to the thread pool initializer
+        const numberOfThreads = navigator.hardwareConcurrency;
+        console.log(`Initializing thread pool with ${numberOfThreads} threads.`);
+        
+
+
+        await wasm.initThreadPool(numberOfThreads);
         ctx.setIsWasmLoaded(true)
         console.log("WASM module successfully loaded and instantiated.");
     } catch (err) {
-        throw new Error(`WASM initialization failed: ${err}`);
+        throw err;
     }
 }
 
-export const WasmProcessor = Wasm;

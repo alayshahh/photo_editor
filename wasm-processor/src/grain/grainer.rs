@@ -1,7 +1,9 @@
-use image::{imageops::resize, ImageBuffer, Rgb};
-use rand::{Rng, rngs::ThreadRng};
-
+use image::{imageops::resize, ImageBuffer, Rgba};
+use rand::{rngs::ThreadRng, Rng};
+use rayon::prelude::*;
 use wasm_bindgen::prelude::*;
+
+const SAMPLES: i32 = 4;
 
 #[wasm_bindgen]
 /**
@@ -18,88 +20,79 @@ pub fn get_noise_mask(
     medium_grain_intensity: f32,
     large_grain_intensity: f32,
 ) -> Vec<f32> {
-    // 1. Generate Layers
-    let fine_grain_noise = gen_noise_mask(width, height, fine_grain_intensity);
-
-    // We can't zip Option<ImageBuffer>, so we create a mandatory zero-filled buffer if the intensity is 0.
-    let medium_layer = if medium_grain_intensity > 0.0 {
-        let noise = gen_noise_mask(width / 2, height / 2, medium_grain_intensity);
-        // We use an intermediate raw Vec<f32> to avoid unnecessary allocations
-        resize(&noise, width, height, image::imageops::FilterType::Gaussian)
+    let mut sum_masks = false;
+    let noise_mask = if fine_grain_intensity > 0.0 {
+        gen_noise_mask(width, height, fine_grain_intensity)
     } else {
-        // Create an empty Rgb<f32> image of the final size
-        image::ImageBuffer::<image::Rgb<f32>, Vec<f32>>::new(width, height)
+        image::ImageBuffer::<image::Rgba<f32>, Vec<f32>>::new(width, height)
     };
 
-    let large_layer = if large_grain_intensity > 0.0 {
+    let medium_mask = if medium_grain_intensity > 0.0 {
+        sum_masks = true;
+        let noise = gen_noise_mask(width / 2, height / 2, medium_grain_intensity);
+        resize(&noise, width, height, image::imageops::FilterType::Gaussian)
+    } else {
+        image::ImageBuffer::<image::Rgba<f32>, Vec<f32>>::new(width, height)
+    };
+
+    let large_mask = if large_grain_intensity > 0.0 {
+        sum_masks = true;
         let noise = gen_noise_mask(width / 4, height / 4, large_grain_intensity);
         resize(&noise, width, height, image::imageops::FilterType::Gaussian)
     } else {
-        image::ImageBuffer::<image::Rgb<f32>, Vec<f32>>::new(width, height)
+        image::ImageBuffer::<image::Rgba<f32>, Vec<f32>>::new(width, height)
     };
 
-    let mut noise_mask = image::ImageBuffer::<image::Rgba<f32>, Vec<f32>>::new(width, height);
+    let mut noise_mask_raw = noise_mask.into_raw();
 
-    // 2. Performant Combination using Zipping
-    // Use the `ImageBuffer::pixels()` iterators for fast sequential access.
-    // The ImageBuffer::pixels_mut() gives us (x, y, &mut pixel), but we just want the pixel value here.
+    if sum_masks {
+        let medium_raw = medium_mask.into_raw();
+        let large_raw = large_mask.into_raw();
 
-    let fine_iter = fine_grain_noise.pixels();
-    let medium_iter = medium_layer.pixels();
-    let large_iter = large_layer.pixels();
-
-    // 2. Combine the three iterators into a flat tuple of length 3
-    let combined_pixels = fine_iter
-        .zip(medium_iter)
-        .zip(large_iter)
-        // Use .map to flatten the nested tuple: ((A, B), C) -> (A, B, C)
-        .map(|((fine, medium), large)| (fine, medium, large));
-
-    // 3. Zip the final mask's mutable iterator with the new flat iterator
-    for ((_x, _y, final_pixel), (fine_pixel, medium_pixel, large_pixel)) in
-        noise_mask.enumerate_pixels_mut().zip(combined_pixels)
-    {
-        // Add the R, G, B channels
-        final_pixel[0] = fine_pixel[0] + medium_pixel[0] + large_pixel[0]; // R
-        final_pixel[1] = fine_pixel[1] + medium_pixel[1] + large_pixel[1]; // G
-        final_pixel[2] = fine_pixel[2] + medium_pixel[2] + large_pixel[2]; // B
-
-        // Alpha channel (1.0 for opaque f32 images)
-        final_pixel[3] = 1.0;
+        // parallel processing!!
+        noise_mask_raw
+            .par_chunks_mut(4)
+            .enumerate()
+            .for_each(|(index, pixel_chunk)| {
+                let raw_index = index * 4;
+                pixel_chunk[0] += medium_raw[raw_index] + large_raw[raw_index];
+                pixel_chunk[1] += medium_raw[raw_index + 1] + large_raw[raw_index + 1];
+                pixel_chunk[2] += medium_raw[raw_index + 2] + large_raw[raw_index + 2];
+                pixel_chunk[3] = 1.0; 
+            });
     }
-
-    noise_mask.into_raw()
+    noise_mask_raw
 }
 
 /**
  * Helper function to create an ImageBuffer given the dimensions and the variance
  */
-fn gen_noise_mask(width: u32, height: u32, variance: f32) -> ImageBuffer<Rgb<f32>, Vec<f32>> {
-    let mut noise_mask: ImageBuffer<Rgb<f32>, Vec<f32>> =
-        ImageBuffer::<Rgb<f32>, Vec<f32>>::new(width, height);
-
-    
+fn gen_noise_mask(width: u32, height: u32, variance: f32) -> ImageBuffer<Rgba<f32>, Vec<f32>> {
+    let mut noise_mask: ImageBuffer<Rgba<f32>, Vec<f32>> =
+        ImageBuffer::<Rgba<f32>, Vec<f32>>::new(width, height);
     if variance <= 0.0 {
         return noise_mask;
     }
-    let SAMPLES = 4;
 
-    let normal_approx_noise = |rng: &mut ThreadRng| {
-        let mut noise_sum = 0.0;
-        for _ in 0..SAMPLES {
-            noise_sum += rng.gen_range(-1.0..1.0);
-        }
-        noise_sum * variance
-
-    };
-
-    let mut rand = rand::thread_rng();
-
-    for pixel in noise_mask.pixels_mut() {
-        pixel[0] = normal_approx_noise(&mut rand);
-        pixel[1] = normal_approx_noise(&mut rand);
-        pixel[2] = normal_approx_noise(&mut rand);
-    }
+    // parallel processing !! this doesn't need to be sequential each pixel (heck even each color channel) is independent 
+    noise_mask
+        .as_mut()
+        .par_chunks_mut(4)
+        .for_each(|pixel_chunk| {
+            let mut rand = rand::thread_rng();
+            pixel_chunk[0] = normal_approx_noise(&mut rand, variance); // red
+            pixel_chunk[1] = normal_approx_noise(&mut rand, variance); // green
+            pixel_chunk[2] = normal_approx_noise(&mut rand, variance); // blue
+            pixel_chunk[3] = 1.0; // alpha
+        });
 
     noise_mask
+}
+
+fn normal_approx_noise(rng: &mut ThreadRng, variance: f32) -> f32 {
+    let mut noise_sum = 0.0;
+    for _ in 0..SAMPLES {
+        noise_sum += rng.gen_range(-1.0..1.0);
+    }
+    noise_sum * variance
 }

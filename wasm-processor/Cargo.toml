@@ -13,6 +13,9 @@ wasm-bindgen = "0.2.105"
 # found on some rust forum https://users.rust-lang.org/t/the-wasm-unknown-unknown-targets-are-not-supported-by-default-you-may-need-to-enable-the-js-feature/131213 
 # not sure if there is a better way to go about this
 getrandom = { version = "0.2", features = ["js"] } 
+rayon = "1.9" 
+wasm-bindgen-rayon = "1.2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+

@@ -1,0 +1,8 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+    # Enables the Wasm threading primitives
+    "-C", "target-feature=+atomics,+bulk-memory",
+    "-C", "link-args=--shared-memory,--max-memory=1073741824,--import-memory,--export=__wasm_init_tls,--export=__tls_size,--export=__tls_align,--export=__tls_base",
+]
+[unstable]
+build-std = ["panic_abort", "std"]

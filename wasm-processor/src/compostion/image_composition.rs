@@ -1,63 +1,52 @@
+use rayon::prelude::*;
 use wasm_bindgen::prelude::*;
-/// Helper function to convert a u8 (0-255) to an f32 (0.0-1.0).
+// Helper function to convert a u8 (0-255) to an f32 (0.0-1.0).
 #[inline]
 fn u8_to_f32(c: u8) -> f32 {
     c as f32 / 255.0
 }
 
-/// Helper function to convert an f32 (0.0-1.0) to a u8 (0-255), using floor() for truncation.
-/// This typically yields visual results closer to browser canvas implementations.
+// Helper function to convert an f32 (0.0-1.0) to a u8 (0-255), using floor() for truncation.
 #[inline]
 fn f32_to_u8(c: f32) -> u8 {
-    // 1. Scale by 255
     let val = c * 255.0;
-    // 2. Clamp: Ensure the value is within [0.0, 255.0]
     let clamped = val.min(255.0).max(0.0);
-    // 3. Truncate (floor): Convert to integer by discarding the fractional part
     clamped.floor() as u8
 }
 
 #[wasm_bindgen]
 pub fn overlay_halation(base: &mut [u8], halation_mask: &[u8]) {
-    let mut pixel = 0;
-    while pixel < base.len() {
-        let base_a = u8_to_f32(base[pixel + 3]);
-        let halation_mask_a = u8_to_f32(halation_mask[pixel + 3]);
 
-        // if both pixels are not transparent
+    base.par_chunks_mut(4).enumerate().for_each(|(index, pixel)|{
+        let rgb_index = index * 4;
+        let pixel_alpha = u8_to_f32(pixel[3]);
+        let halation_alpha = u8_to_f32(halation_mask[rgb_index+3]);
+        let final_alpha = pixel_alpha + halation_alpha * (1.0 - pixel_alpha);
 
-        let final_a = base_a + halation_mask_a * (1.0 - base_a);
+        pixel[0] = mix_halation_colors(pixel_alpha, halation_alpha, u8_to_f32(pixel[0]), u8_to_f32(halation_mask[rgb_index]));
+        pixel[1] = mix_halation_colors(pixel_alpha, halation_alpha, u8_to_f32(pixel[1]), u8_to_f32(halation_mask[rgb_index + 1]));
+        pixel[2] = mix_halation_colors(pixel_alpha, halation_alpha, u8_to_f32(pixel[2]), u8_to_f32(halation_mask[rgb_index + 2]));
+        pixel[3] = f32_to_u8(final_alpha);
 
-        for i in 0..=2 {
-            let base_c = u8_to_f32(base[pixel + i]);
-            let halation_mask_c = u8_to_f32(halation_mask[pixel + i]);
-            let base_c_a = if base_a > 0.0 { base_c * base_a } else { 0.0 };
-            let halation_mask_c_a = if halation_mask_a > 0.0 {
-                halation_mask_c * halation_mask_a
-            } else {
-                0.0
-            };
-            let max_c_a = base_c_a.max(halation_mask_c_a);
-            base[pixel + i] = f32_to_u8(max_c_a)
-        }
-        base[pixel + 3] = f32_to_u8(final_a);
-
-        // other wise the only halation pixel is transparent in which case we don't do anything
-        pixel += 4;
-    }
+    });
 }
 
+fn mix_halation_colors(base_a: f32, mask_a: f32, base_c: f32, mask_c: f32) -> u8 {
+    let base_c_a = base_a * base_c;
+    let mask_c_a= mask_a * mask_c;
+    f32_to_u8(base_c_a.max(mask_c_a))
+}
 
 #[wasm_bindgen]
 pub fn overlay_grain_mask(image: &mut [u8], grain_mask: &[f32]) {
-    let mut pixel = 0;
-    while pixel < image.len() {
-        // 1 liner per pixel lol
-        image[pixel] = f32_to_u8(u8_to_f32(image[pixel]) + grain_mask[pixel]);
-        image[pixel+1]= f32_to_u8(u8_to_f32(image[pixel+1]) + grain_mask[pixel+1]);
-        image[pixel+2] = f32_to_u8(u8_to_f32(image[pixel+2]) + grain_mask[pixel+2]);
-        // im skipping alpha here since idt i want to make this more or less opaque. simple pixel addition
-        pixel += 4;
-    }
+    image
+        .par_chunks_mut(4)
+        .enumerate()
+        .for_each(|(index, pixel)| {
+            let rgb_index = index * 4;
+            pixel[0] = f32_to_u8(u8_to_f32(pixel[0]) + grain_mask[rgb_index]);
+            pixel[1] = f32_to_u8(u8_to_f32(pixel[1]) + grain_mask[rgb_index + 1]);
+            pixel[2] = f32_to_u8(u8_to_f32(pixel[2]) + grain_mask[rgb_index + 2]);
+            // im skipping alpha here since idt i want to make this more or less opaque. simple pixel addition
+        });
 }
-
