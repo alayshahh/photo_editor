@@ -28,8 +28,6 @@ build/
 #rust outputs
 wasm-processor/target/
 
-#wasm output
-src/pkg
 
 #rust-analyzer
 /target
