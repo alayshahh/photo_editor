@@ -70,21 +70,21 @@ export async function initWasmProcessor(ctx: CanvasContextProps): Promise<void> 
         return;
     }
 
-    // The wasm-pack glue code often exports a default 'init' function 
-    // that handles the fetching and instantiation of the .wasm binary.
+   
     try {
-        // We call the generated init function. It returns a Promise.
-        let wasm = await Wasm.default(); // <--- This is the core loading step
+        
+        let wasm = await Wasm.default();
+
         console.log(wasm.memory.buffer.byteLength);
-        console.log(wasm.memory.buffer instanceof SharedArrayBuffer); // 🛑 MUST be TRUE
-        // Pass the number of available cores to the thread pool initializer
+        console.log(wasm.memory.buffer instanceof SharedArrayBuffer);  // returns false for some reason
+
+
         const numberOfThreads = navigator.hardwareConcurrency;
         console.log(`Initializing thread pool with ${numberOfThreads} threads.`);
-        
 
-
-        await wasm.initThreadPool(numberOfThreads);
+        await Wasm.initThreadPool(numberOfThreads);
         ctx.setIsWasmLoaded(true)
+
         console.log("WASM module successfully loaded and instantiated.");
     } catch (err) {
         throw err;
