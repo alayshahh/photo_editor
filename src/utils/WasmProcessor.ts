@@ -61,7 +61,6 @@ export function createCompositeImage(imageData: ImageData, halationMaskImageData
 }
 
 export function createGrainMask(width: number, height: number, largeGrainIntensity: number, mediumGrainIntensity: number, fineGrainIntensity: number): Float32Array {
-    console.log(`Calling wasm get noise mask with width: ${width}, height: ${height}, largeGrainIntensity${largeGrainIntensity}, mediumGrainIntensity: ${mediumGrainIntensity}, fineGrainIntensity: ${fineGrainIntensity}`)
     return Wasm.get_noise_mask(width, height, fineGrainIntensity, mediumGrainIntensity, largeGrainIntensity);
 }
 
@@ -70,17 +69,26 @@ export async function initWasmProcessor(ctx: CanvasContextProps): Promise<void> 
     if (ctx.isWasmLoaded) {
         return;
     }
-
-    // The wasm-pack glue code often exports a default 'init' function 
-    // that handles the fetching and instantiation of the .wasm binary.
+    ctx.setIsWasmLoaded(true);
     try {
-        // We call the generated init function. It returns a Promise.
-        await Wasm.default(); // <--- This is the core loading step
+        
+        
+        let wasm = await Wasm.default();
+
+        console.log(wasm.memory.buffer.byteLength);
+        console.log(wasm.memory.buffer instanceof SharedArrayBuffer);  // returns false for some reason
+
+
+        const numberOfThreads = navigator.hardwareConcurrency;
+        console.log(`Initializing thread pool with ${numberOfThreads} threads.`);
+
+        await Wasm.initThreadPool(numberOfThreads);
         ctx.setIsWasmLoaded(true)
+
         console.log("WASM module successfully loaded and instantiated.");
     } catch (err) {
-        throw new Error(`WASM initialization failed: ${err}`);
+        // ctx.setIsWasmLoaded(false)
+        throw err;
     }
 }
 
-export const WasmProcessor = Wasm;

@@ -30,9 +30,14 @@ export const ImagePreview: React.FC = () => {
 
   // load wasm engine
   useEffect(() => {
+    if (!ctx.isWasmLoaded){
+      console.log("Loading WASM!")
     initWasmProcessor(ctx)
       .then(() => console.log('loaded WASM'))
       .catch(err => console.log(`WASM Load Failure ${err}`))
+    } else {
+      console.log("WASM alr loaded")
+    }
   }, [ctx.setIsWasmLoaded])
 
   useEffect(() => {
