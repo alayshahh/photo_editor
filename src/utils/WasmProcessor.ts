@@ -45,10 +45,10 @@ export function createBrightnessMask(originalData: ImageData, threshold: number)
 export function createCompositeImage(imageData: ImageData, halationMaskImageData: ImageData | null, grainMask: Float32Array | null): ImageData {
     const inputMatrix = imageData.data.slice();
     if (grainMask) {
-        overlay_grain_mask(inputMatrix as unknown as Uint8Array, grainMask);
+        Wasm.overlay_grain_mask(inputMatrix as unknown as Uint8Array, grainMask);
     }
     if (halationMaskImageData) {
-        overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
+        Wasm.overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
     }
 
     return new ImageData(
@@ -69,9 +69,9 @@ export async function initWasmProcessor(ctx: CanvasContextProps): Promise<void> 
     if (ctx.isWasmLoaded) {
         return;
     }
-
-   
+    ctx.setIsWasmLoaded(true);
     try {
+        
         
         let wasm = await Wasm.default();
 
@@ -87,6 +87,7 @@ export async function initWasmProcessor(ctx: CanvasContextProps): Promise<void> 
 
         console.log("WASM module successfully loaded and instantiated.");
     } catch (err) {
+        // ctx.setIsWasmLoaded(false)
         throw err;
     }
 }

@@ -2,9 +2,11 @@ import { createGrainMask } from "../../../utils/WasmProcessor";
 import { CanvasContextProps } from "../../image_preview/canvas_context";
 
 export function updateGrainMask(context: CanvasContextProps): void {
-    console.log(`Calling update mask with context: ${context}`)
+    
     // if theres no image don't create the noise mask
     if (!context.originalImageData || !context.isWasmLoaded) return
+
+    console.log(`Calling update mask with context: ${context}`)
 
     // no need to make a grain mask if the grain settings are all 0
     const grainSettings = context.filterSettings.grain;
