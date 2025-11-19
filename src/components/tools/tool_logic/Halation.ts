@@ -1,12 +1,12 @@
-import { createBrightnessMask, colorizeMask, createCompositeImage } from "../../../utils/WasmProcessor";
-import { webGLProcessor } from "../../../utils/WebGLProcessor";
+import { createBrightnessMask, colorizeMask, createCompositeImage, blurBrightnessMask } from "../../../utils/WasmProcessor";
+// import { webGLProcessor } from "../../../utils/WebGLProcessor";
 import { CanvasContextProps } from "../../image_preview/canvas_context";
 
 export function updateBrightnessMask(context: CanvasContextProps):void {
     if (context.imageLoaded && context.originalImageData !== null && context.isWasmLoaded) {
-        const mask = createBrightnessMask(context.originalImageData, context.filterSettings.halation.brightnessThreshold)
-        context.setBrightnessMaskData(mask)
-        webGLProcessor.updateInputMask(mask);
+        let mask = 
+        context.setBrightnessMaskData(createBrightnessMask(context.originalImageData, context.filterSettings.halation.brightnessThreshold))
+        console.log(context.brightnessMaskData)
     } else {
         context.setBrightnessMaskData(null)
     }
@@ -16,19 +16,15 @@ export function updateBrightnessMask(context: CanvasContextProps):void {
 
 export function updateBlurRadius(context: CanvasContextProps):void {
     const blur_radius = context.filterSettings.halation.blurRadius
-    if (!context.brightnessMaskData || (!context.isWebGLLoaded && blur_radius > 0)) {
+    if (!context.brightnessMaskData || !context.originalImageData) {
         context.setBlurredHalationLayerData(null) // Clear the layer to halt the chain
         return
     }
-    if (!context.brightnessMaskData) return
     if (blur_radius == 0) { // no blur needed with 0 blur radius
         context.setBlurredHalationLayerData(context.brightnessMaskData)
         return
     }
-    console.log(context.brightnessMaskData)
-    context.setBlurredHalationLayerData(
-        webGLProcessor.applyBlur(context.filterSettings.halation.blurRadius)
-    )
+    context.setBlurredHalationLayerData(blurBrightnessMask(context.brightnessMaskData.slice(), context.originalImageData.width, context.originalImageData.height, context.filterSettings.halation.blurRadius))
 }
 
 

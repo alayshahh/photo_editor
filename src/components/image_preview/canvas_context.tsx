@@ -11,16 +11,16 @@ export interface CanvasContextProps {
     setModifiedImageData: (data: ImageData) => void;
     filterSettings: FilterSettings
     updateFilterSettings: (tool: keyof FilterSettings, settings: Partial<FilterSettings[typeof tool]>) => void;
-    brightnessMaskData: ImageData | null; 
-    setBrightnessMaskData: (data: ImageData | null) => void;
-    blurredHalationLayerData: ImageData | null; 
-    setBlurredHalationLayerData: (data: ImageData | null) => void;
+    brightnessMaskData: Uint8Array | null; 
+    setBrightnessMaskData: (data: Uint8Array | null) => void;
+    blurredHalationLayerData: Uint8Array | null; 
+    setBlurredHalationLayerData: (data: Uint8Array | null) => void;
     isWasmLoaded: boolean,
     setIsWasmLoaded: (loaded: boolean) => void;
-    isWebGLLoaded: boolean,
-    setIsWebGLLoaded: (loaded: boolean) => void
-    halationLayerData: ImageData | null; 
-    setHalationLayerData: (data: ImageData | null) => void;
+    // isWebGLLoaded: boolean,
+    // setIsWebGLLoaded: (loaded: boolean) => void
+    halationLayerData: Uint8Array | null; 
+    setHalationLayerData: (data: Uint8Array | null) => void;
     grainNoiseMask: Float32Array | null;
     setGrainNoiseMask: (data: Float32Array | null) => void;
 }
@@ -34,13 +34,13 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null);
 
     // 1. State for the Thresholded Brightness Mask
-    const [brightnessMaskData, setBrightnessMaskData] = useState<ImageData | null>(null); 
+    const [brightnessMaskData, setBrightnessMaskData] = useState<Uint8Array | null>(null); 
 
     // 2. State for the Blurred Halation Layer
-    const [blurredHalationLayerData, setBlurredHalationLayerData] = useState<ImageData | null>(null);
+    const [blurredHalationLayerData, setBlurredHalationLayerData] = useState<Uint8Array | null>(null);
 
     // 3. Final state for halations
-    const [halationLayerData, setHalationLayerData] = useState<ImageData | null>(null);
+    const [halationLayerData, setHalationLayerData] = useState<Uint8Array | null>(null);
 
     // grain state
     const [grainNoiseMask, setGrainNoiseMask] = useState<Float32Array|null>(null);
@@ -49,7 +49,7 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // engine states
     const [isWasmLoaded, setIsWasmLoaded] = useState<boolean>(false);
-    const [isWebGLLoaded, setIsWebGLLoaded] = useState<boolean>(false);
+    // const [isWebGLLoaded, setIsWebGLLoaded] = useState<boolean>(false);
 
 
     // Universal setter function
@@ -88,7 +88,7 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setImageLoaded(true);
             
             // reset cache for halations on new image upload
-            setIsWebGLLoaded(false); // Force WebGL re-initialization
+            // setIsWebGLLoaded(false); // Force WebGL re-initialization
             setBrightnessMaskData(null); // Clear the old mask data
             setBlurredHalationLayerData(null); // Clear the old blurred data
             setHalationLayerData(null);
@@ -126,8 +126,8 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setBlurredHalationLayerData,
                 isWasmLoaded,
                 setIsWasmLoaded,
-                isWebGLLoaded,
-                setIsWebGLLoaded,
+                // isWebGLLoaded,
+                // setIsWebGLLoaded,
                 halationLayerData,
                 setHalationLayerData,
                 grainNoiseMask,

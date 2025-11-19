@@ -378,17 +378,17 @@ export class WebGLProcessor {
 export const webGLProcessor = new WebGLProcessor();
 
 export function initWebGLProcessor(context: CanvasContextProps) {
-    if (!context.originalImageData) {
-        // ensure we dont fall in a weird space
-        context.setIsWebGLLoaded(false)
-        return
-    }
-    if (!context.isWebGLLoaded) {
-        if (webGLProcessor.init(context.originalImageData.width, context.originalImageData.height)) {
-            context.setIsWebGLLoaded(true);
-        } else {
-            console.error("Failed to initialize webGL :( ")
-        }
-    }
+    // if (!context.originalImageData) {
+    //     // // ensure we dont fall in a weird space
+    //     // context.setIsWebGLLoaded(false)
+    //     // return
+    // }
+    // if (!context.isWebGLLoaded) {
+    //     if (webGLProcessor.init(context.originalImageData.width, context.originalImageData.height)) {
+    //         context.setIsWebGLLoaded(true);
+    //     } else {
+    //         console.error("Failed to initialize webGL :( ")
+    //     }
+    // }
 
 }

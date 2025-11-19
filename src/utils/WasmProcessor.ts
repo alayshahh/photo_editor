@@ -12,48 +12,37 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 export function colorizeMask(
-    blurredMaskData: ImageData,
+    blurredMaskData: Uint8Array,
     tintColor: string
-): ImageData {
-
-    const colorizedBuffer = blurredMaskData.data.slice();
+): Uint8Array {
     const [r, g, b] = hexToRgb(tintColor);
 
-    Wasm.color_blurred_mask(
-        colorizedBuffer as unknown as Uint8Array, // in place mutation
+    return Wasm.color_blurred_mask(
+        blurredMaskData, // in place mutation
         r,
         g,
         b
     );
-    return new ImageData(
-        colorizedBuffer,
-        blurredMaskData.width,
-        blurredMaskData.height
-    )
 }
 
-export function createBrightnessMask(originalData: ImageData, threshold: number) {
-    const inputMatrix = originalData.data.slice();
-    Wasm.create_brightness_mask(inputMatrix as unknown as Uint8Array, threshold);
-    return new ImageData(
-        inputMatrix,
-        originalData.width,
-        originalData.height
-    );
+export function createBrightnessMask(originalData: ImageData, threshold: number): Uint8Array {
+    return Wasm.create_brightness_mask(originalData.data as unknown as Uint8Array, threshold);
 }
 
-export function createCompositeImage(imageData: ImageData, halationMaskImageData: ImageData | null, grainMask: Float32Array | null): ImageData {
+export function blurBrightnessMask(brightness_mask: Uint8Array, width: number, height: number, radius: number) {
+    return Wasm.gauss_blur(brightness_mask.slice(), width, height, radius);
+}
+
+export function createCompositeImage(imageData: ImageData, halationMaskImageData: Uint8Array | null, grainMask: Float32Array | null): ImageData {
     const inputMatrix = imageData.data.slice();
     if (grainMask) {
         Wasm.overlay_grain_mask(inputMatrix as unknown as Uint8Array, grainMask);
     }
     if (halationMaskImageData) {
-        Wasm.overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData.data as unknown as Uint8Array);
+        Wasm.overlay_halation(inputMatrix as unknown as Uint8Array, halationMaskImageData);
     }
 
     return new ImageData(
-
-
         inputMatrix,
         imageData.width,
         imageData.height
