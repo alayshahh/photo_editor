@@ -17,8 +17,6 @@ export interface CanvasContextProps {
     setBlurredHalationLayerData: (data: Uint8Array | null) => void;
     isWasmLoaded: boolean,
     setIsWasmLoaded: (loaded: boolean) => void;
-    // isWebGLLoaded: boolean,
-    // setIsWebGLLoaded: (loaded: boolean) => void
     halationLayerData: Uint8Array | null; 
     setHalationLayerData: (data: Uint8Array | null) => void;
     grainNoiseMask: Float32Array | null;
@@ -49,7 +47,6 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // engine states
     const [isWasmLoaded, setIsWasmLoaded] = useState<boolean>(false);
-    // const [isWebGLLoaded, setIsWebGLLoaded] = useState<boolean>(false);
 
 
     // Universal setter function
@@ -88,7 +85,6 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setImageLoaded(true);
             
             // reset cache for halations on new image upload
-            // setIsWebGLLoaded(false); // Force WebGL re-initialization
             setBrightnessMaskData(null); // Clear the old mask data
             setBlurredHalationLayerData(null); // Clear the old blurred data
             setHalationLayerData(null);
@@ -126,8 +122,6 @@ export const CanvasProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setBlurredHalationLayerData,
                 isWasmLoaded,
                 setIsWasmLoaded,
-                // isWebGLLoaded,
-                // setIsWebGLLoaded,
                 halationLayerData,
                 setHalationLayerData,
                 grainNoiseMask,

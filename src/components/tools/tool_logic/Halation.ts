@@ -1,5 +1,4 @@
 import { createBrightnessMask, colorizeMask, createCompositeImage, blurBrightnessMask } from "../../../utils/WasmProcessor";
-// import { webGLProcessor } from "../../../utils/WebGLProcessor";
 import { CanvasContextProps } from "../../image_preview/canvas_context";
 
 export function updateBrightnessMask(context: CanvasContextProps):void {
